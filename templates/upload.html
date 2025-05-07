@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Upload Image - Cyclone Prediction</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body class="page-wrapper">
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="container">
+            <h1 class="logo">Cyclone Prediction</h1>
+            <a href="/prediction" class="back-btn">Back to Prediction</a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="container">
+            <h1 class="section-title">Upload Image Prediction</h1>
+            <p class="subtitle">Predict cyclone intensification using your satellite imagery</p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <section class="card">
+            <h2>Upload Your Image</h2>
+            <form id="upload-form" enctype="multipart/form-data">
+                <div class="form-group">
+                    <label for="file">Select Image (PNG/JPG)</label>
+                    <input type="file" id="file" name="file" accept=".png,.jpg,.jpeg,.webp">
+                </div>
+                <button type="submit" class="action-btn">Predict RI</button>
+            </form>
+            <div id="upload-result" class="result hidden">
+                <h3>Prediction Result</h3>
+                <img id="uploaded-image" alt="Uploaded Image">
+                <p id="upload-probability"></p>
+                <img id="upload-gauge" alt="Risk Gauge">
+                <p id="upload-risk"></p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>© 2025 Cyclone Prediction.</p>
+        </div>
+    </footer>
+
+    <script>
+        // Handle upload form submission
+        document.getElementById('upload-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const resultDiv = document.getElementById('upload-result');
+            resultDiv.classList.add('hidden');
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('uploaded-image').src = data.image;
+                    document.getElementById('upload-probability').textContent = `RI Probability: ${data.ri_probability}%`;
+                    document.getElementById('upload-gauge').src = data.gauge;
+                    document.getElementById('upload-risk').textContent = `Risk Level: ${data.risk_level}`;
+                    resultDiv.classList.remove('hidden');
+                    resultDiv.classList.add('fade-in');
+                } else {
+                    alert(data.error);
+                }
+            } catch (error) {
+                alert('Error processing request: ' + error.message);
+            }
+        });
+    </script>
+</body>
+</html>

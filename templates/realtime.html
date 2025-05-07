@@ -1,0 +1,253 @@
+<!-- realtime.html (updated version) -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Cyclone Tracker</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        .cyclone-card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 20px;
+            background-color: #f9f9f9;
+        }
+        .cyclone-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+        .cyclone-name {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .risk-high {
+            color: #e74c3c;
+            font-weight: bold;
+        }
+        .risk-medium {
+            color: #f39c12;
+            font-weight: bold;
+        }
+        .risk-low {
+            color: #27ae60;
+            font-weight: bold;
+        }
+        .cyclone-stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .stat-item {
+            background-color: white;
+            padding: 10px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .stat-label {
+            font-size: 0.8em;
+            color: #7f8c8d;
+        }
+        .stat-value {
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        #map {
+            height: 400px;
+            margin-top: 20px;
+            border-radius: 8px;
+        }
+        .no-cyclones {
+            text-align: center;
+            padding: 20px;
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body class="page-wrapper">
+    <!-- Navigation -->
+    <nav class="nav">
+        <div class="container">
+            <h1 class="logo">Cyclone RI Tracker</h1>
+            <a href="/prediction" class="back-btn">Back to Prediction</a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="container">
+            <h1 class="section-title">Real-Time Cyclone Tracker</h1>
+            <p class="subtitle">Monitoring active tropical cyclones for rapid intensification</p>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="container">
+        <section class="card">
+            <h2>Active Tropical Cyclones</h2>
+            <button id="refresh-btn" class="action-btn">Refresh Data</button>
+            <p id="last-updated">Last updated: Never</p>
+            <div id="status-message"></div>
+            
+            <div id="cyclones-container">
+                <!-- Cyclone cards will be inserted here -->
+            </div>
+            
+            <div id="map"></div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p>© 2025 Cyclone RI Prediction System. Data source: NOAA/NHC</p>
+        </div>
+    </footer>
+
+    <script>
+        // Initialize Leaflet map
+        let map = L.map('map').setView([20, -80], 3);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+        
+        // Track all markers for easy removal
+        let markers = [];
+        
+        // Function to update cyclone display
+        async function updateCycloneData() {
+            try {
+                const response = await fetch('/realtime', {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                
+                if (data.success) {
+                    document.getElementById('last-updated').textContent = 
+                        `Last updated: ${data.timestamp}`;
+                    
+                    // Update status message
+                    const statusEl = document.getElementById('status-message');
+                    if (data.message) {
+                        statusEl.textContent = data.message;
+                        statusEl.className = 'status-message';
+                    } else {
+                        statusEl.textContent = '';
+                    }
+                    
+                    const container = document.getElementById('cyclones-container');
+                    container.innerHTML = '';
+                    
+                    // Clear previous markers
+                    markers.forEach(marker => map.removeLayer(marker));
+                    markers = [];
+                    
+                    if (data.cyclones.length === 0) {
+                        // No cyclones case
+                        container.innerHTML = `
+                            <div class="no-cyclones">
+                                <p>No active tropical cyclones detected at this time.</p>
+                                ${data.image ? `<img src="${data.image}" alt="Satellite view" style="max-width: 100%; margin-top: 15px;">` : ''}
+                                ${data.source ? `<p>Source: ${data.source}</p>` : ''}
+                            </div>
+                        `;
+                        return;
+                    }
+                    
+                    // Process each cyclone
+                    data.cyclones.forEach(cyclone => {
+                        const riskClass = `risk-${cyclone.risk_level.toLowerCase()}`;
+                        
+                        const card = document.createElement('div');
+                        card.className = 'cyclone-card';
+                        card.innerHTML = `
+                            <div class="cyclone-header">
+                                <span class="cyclone-name">${cyclone.name}</span>
+                                <span class="${riskClass}">
+                                    RI Risk: ${cyclone.risk_level} (${cyclone.ri_probability}%)
+                                </span>
+                            </div>
+                            <div class="cyclone-stats">
+                                <div class="stat-item">
+                                    <div class="stat-label">Location</div>
+                                    <div class="stat-value">${cyclone.lat}°N, ${cyclone.lon}°E</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">Wind Speed</div>
+                                    <div class="stat-value">${cyclone.wind_speed} kt</div>
+                                </div>
+                                <div class="stat-item">
+                                    <div class="stat-label">Pressure</div>
+                                    <div class="stat-value">${cyclone.pressure} hPa</div>
+                                </div>
+                            </div>
+                            <div class="cyclone-image">
+                                <img src="${cyclone.image}" alt="Satellite view of ${cyclone.name}" style="max-width: 100%; border-radius: 5px;">
+                                <p>Source: ${cyclone.image_url}</p>
+                            </div>
+                        `;
+                        
+                        container.appendChild(card);
+                        
+                        // Add marker to map
+                        const marker = L.marker([cyclone.lat, cyclone.lon], {
+                            icon: L.divIcon({
+                                className: 'custom-icon',
+                                html: `<div style="background-color: ${getRiskColor(cyclone.risk_level)}; 
+                                      width: 12px; height: 12px; border-radius: 50%; 
+                                      border: 2px solid #ffffff;"></div>`
+                            })
+                        }).addTo(map)
+                          .bindPopup(`<b>${cyclone.name}</b><br>
+                                      Wind: ${cyclone.wind_speed} kt<br>
+                                      Pressure: ${cyclone.pressure} hPa<br>
+                                      RI Risk: <span class="${riskClass}">${cyclone.risk_level}</span>`);
+                        
+                        markers.push(marker);
+                    });
+                    
+                    // Add risk gauge if available
+                    if (data.gauge) {
+                        const gaugeDiv = document.createElement('div');
+                        gaugeDiv.style.margin = '20px 0';
+                        gaugeDiv.innerHTML = `<h3>Overall RI Risk</h3><img src="${data.gauge}" alt="Risk gauge" style="max-width: 100%;">`;
+                        container.appendChild(gaugeDiv);
+                    }
+                    
+                    // Adjust map view to show all cyclones
+                    if (data.cyclones.length > 0) {
+                        const bounds = L.latLngBounds(markers.map(m => m.getLatLng()));
+                        map.fitBounds(bounds, {padding: [50, 50]});
+                    }
+                } else {
+                    alert(`Error: ${data.error}`);
+                }
+            } catch (error) {
+                alert('Error fetching data: ' + error.message);
+            }
+        }
+        
+        function getRiskColor(riskLevel) {
+            switch (riskLevel.toLowerCase()) {
+                case 'high': return '#e74c3c';
+                case 'medium': return '#f39c12';
+                case 'low': return '#27ae60';
+                default: return '#3498db';
+            }
+        }
+        
+        // Set up refresh button and initial load
+        document.getElementById('refresh-btn').addEventListener('click', updateCycloneData);
+        updateCycloneData();
+    </script>
+</body>
+</html>
